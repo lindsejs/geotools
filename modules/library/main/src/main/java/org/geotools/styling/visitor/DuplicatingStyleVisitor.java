@@ -625,6 +625,12 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
         copy.setOpacity( copy(stroke.getOpacity()));
         copy.setWidth( copy(stroke.getWidth()));
 
+		if (stroke.getCustomProperties()!=null) {
+			Map map = new HashMap();
+			map.putAll(stroke.getCustomProperties());
+			copy.setCustomProperties(map);
+		}
+
         if( STRICT && !copy.equals( stroke)){
             throw new IllegalStateException("Was unable to duplicate provided Stroke:"+stroke );
         }

@@ -54,6 +54,12 @@ import org.opengis.filter.FilterFactory;
 import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.GeometryFactory;
 import com.vividsolutions.jts.geom.Point;
+import java.awt.BasicStroke;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertNotNull;
 
 /**
  *
@@ -368,4 +374,25 @@ public class SLDStyleFactoryTest extends TestCase {
          IconStyle2D icon = (IconStyle2D) sld.createPointStyle(feature, symb, range);
          assertNull(icon);
      }
+
+	 public void testDefaultLineSymbolizerWithColorAndDynamicDashArray() throws Exception {
+        LineSymbolizer symb = sf.createLineSymbolizer();
+
+		org.geotools.styling.Stroke strokeDyn = sf.createStroke( ff.literal("#0000FF"), ff.literal(1.0));
+		Map customProperties = new HashMap();
+		customProperties.put(org.geotools.styling.Stroke.DYNAMIC_DASHARRAY, ff.literal("5.0 10.0"));
+		strokeDyn.setCustomProperties(customProperties);
+        symb.setStroke( strokeDyn );
+
+        Style2D s = sld.createLineStyle( feature, symb, range );
+        assertNotNull( s );
+
+        DynamicLineStyle2D s2 = (DynamicLineStyle2D) sld.createDynamicLineStyle( feature, symb, range );
+        assertNotNull( s2 );
+        Stroke stroke = s2.getStroke();
+        assertNotNull( stroke );
+
+		assertTrue(stroke instanceof BasicStroke);
+		assertTrue(Arrays.equals(new float[] {5.0f,10.0f}, ((BasicStroke)stroke).getDashArray()));
+    }
 }

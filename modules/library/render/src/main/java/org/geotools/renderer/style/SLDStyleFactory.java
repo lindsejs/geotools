@@ -935,6 +935,34 @@ public class SLDStyleFactory {
 		float width = evalToFloat(stroke.getWidth(), feature, 1);
 		float dashOffset = evalToFloat(stroke.getDashOffset(), feature, 0);
 
+		Map props=stroke.getCustomProperties();
+        if (props!=null) {
+		if (LOGGER.isLoggable(Level.FINEST)) {
+                LOGGER.finest("found stroke custom properties");
+		}
+            Expression e = (Expression)props.get(org.geotools.styling.Stroke.DYNAMIC_DASHARRAY);
+
+		if (LOGGER.isLoggable(Level.FINEST)) {
+				LOGGER.finest("property expression dynamic-dasharray = " + e);
+			}
+
+		if (e!=null) {
+			String dashString = (String)e.evaluate(feature);
+			if (dashString!=null && !"".equals(dashString)) {
+					String[] stok = dashString.split(" ");
+					dashes = new float[stok.length];
+
+					for (int l = 0; l < dashes.length; l++) {
+						dashes[l] = Float.parseFloat(stok[l]);
+					}
+
+					if (LOGGER.isLoggable(Level.FINEST)) {
+						LOGGER.finest("property dasharray modified to = " + dashString);
+					}
+			}
+		}
+        }
+
 		// Simple optimization: let java2d use the fast drawing path if the line
 		// width
 		// is small enough...

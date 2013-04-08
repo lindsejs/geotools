@@ -1855,6 +1855,26 @@ public class SLDParser {
             }
         }
 
+		list = findElements(((Element) root), "CustomProperty");
+
+		if (list.getLength() > 0)
+		{
+			Map paramList = new HashMap();
+			for (int i = 0; i < list.getLength(); i++)
+			{
+				Node child = list.item(i);
+				LOGGER.finest("custom child is " + child);
+				String propName = child.getAttributes().getNamedItem("name")
+					.getNodeValue();
+				LOGGER.finest("setting custom property " + propName + " to "
+					+ child.getFirstChild().getNodeValue());
+				Expression value = parseCssParameter(child);
+				paramList.put(propName, value);
+			}
+
+			stroke.setCustomProperties(paramList);
+		}
+
         return stroke;
     }
 

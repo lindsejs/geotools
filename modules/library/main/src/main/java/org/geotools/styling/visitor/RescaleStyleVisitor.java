@@ -16,6 +16,7 @@
  */
 package org.geotools.styling.visitor;
 
+import java.util.HashMap;
 import static org.geotools.styling.TextSymbolizer.*;
 
 import java.util.Map;
@@ -126,6 +127,15 @@ public class RescaleStyleVisitor extends DuplicatingStyleVisitor {
         copy.setLineJoin( copy(stroke.getLineJoin()));
         copy.setOpacity( copy(stroke.getOpacity()));
         copy.setWidth( rescale(stroke.getWidth()));
+
+		if (stroke.getCustomProperties()!=null) {
+			Map<String,Object> props = new HashMap<String,Object>();
+			props.putAll(stroke.getCustomProperties());
+			if (props.containsKey(Stroke.DYNAMIC_DASHARRAY)) {
+				props.put(Stroke.DYNAMIC_DASHARRAY, rescaleList((Expression)props.get(Stroke.DYNAMIC_DASHARRAY)));
+			}
+			copy.setCustomProperties(props);
+		}
         pages.push(copy);
     }   
     
@@ -146,6 +156,29 @@ public class RescaleStyleVisitor extends DuplicatingStyleVisitor {
         
         return rescaled;
     }
+
+	 /**
+     * Used to rescale the provided list.
+	 *
+     * @param expr
+     * @return expr multiplied by the provided scale
+     */
+    protected Expression rescaleList( Expression expr ) {
+        if(expr == null) {
+            return null;
+        }
+        if(expr == Expression.NIL) {
+            return Expression.NIL;
+        }
+
+        Expression rescale = ff.function("listMultiply", scale, expr );
+        if( expr instanceof Literal && scale instanceof Literal){
+            String constant = (String) rescale.evaluate(null);
+            return ff.literal(constant);
+        }
+        return rescale;
+    }
+
 
     /** Make graphics (such as used with PointSymbolizer) bigger */
     public void visit(Graphic gr) {

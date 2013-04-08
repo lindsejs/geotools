@@ -18,7 +18,9 @@ package org.geotools.styling.visitor;
 
 import java.awt.Color;
 
-import javax.measure.unit.SI;
+import java.util.HashMap;
+import java.util.Map;
+import static junit.framework.Assert.assertEquals;
 
 import junit.framework.TestCase;
 
@@ -39,6 +41,7 @@ import org.geotools.styling.StyleFactory;
 import org.geotools.styling.Symbolizer;
 import org.geotools.styling.TextSymbolizer;
 import org.opengis.filter.FilterFactory2;
+import org.opengis.filter.expression.Expression;
 
 
 /**
@@ -136,7 +139,20 @@ public class RescaleStyleVisitorTest extends TestCase {
         assertEquals(10.0f, clone.getDashArray()[0]);
         assertEquals(20.0f, clone.getDashArray()[1]);
     }
-    
+
+	public void testDynamicStroke() throws Exception {
+        Stroke original = sb.createStroke(Color.RED, 2);
+		Map<String,Object> props = new HashMap<String,Object>();
+		props.put(Stroke.DYNAMIC_DASHARRAY, ff.literal("5 10"));
+		original.setCustomProperties(props);
+        original.accept(visitor);
+        Stroke clone = (Stroke) visitor.getCopy();
+
+        assertEquals(4.0d, clone.getWidth().evaluate(null));
+		assertNotNull(clone.getCustomProperties().get(Stroke.DYNAMIC_DASHARRAY));
+        assertEquals("10.0 20.0", ((Expression)clone.getCustomProperties().get(Stroke.DYNAMIC_DASHARRAY)).evaluate(null));
+    }
+
     public void testTextSymbolizer() throws Exception {
         TextSymbolizer ts = sb.createTextSymbolizer(Color.BLACK, (Font) null, "label");
         ts.getOptions().put(TextSymbolizer.MAX_DISPLACEMENT_KEY, "10");

@@ -21,6 +21,9 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Composite;
 import java.awt.Paint;
+import java.util.Map;
+import java.util.StringTokenizer;
+import java.util.logging.Level;
 
 import org.geotools.styling.LineSymbolizer;
 import org.geotools.styling.Stroke;
@@ -81,6 +84,24 @@ public class DynamicLineStyle2D extends org.geotools.renderer.style.LineStyle2D 
         float[] dashes = stroke.getDashArray();
         float width = ((Float) stroke.getWidth().evaluate(feature, Float.class)).floatValue();
         float dashOffset = ((Float) stroke.getDashOffset().evaluate(feature, Float.class)).floatValue();
+
+		Map props=stroke.getCustomProperties();
+        if (props!=null) {
+            Expression e = (Expression)props.get(Stroke.DYNAMIC_DASHARRAY);
+
+		if (e!=null) {
+			String dashString = (String)e.evaluate(feature);
+			if (dashString!=null && !"".equals(dashString)) {
+					String[] stok = dashString.split(" ");
+					dashes = new float[stok.length];
+
+					for (int l = 0; l < dashes.length; l++) {
+						dashes[l] = Float.parseFloat(stok[l]);
+					}
+			}
+		}
+        }
+
 
         // Simple optimization: let java2d use the fast drawing path if the line width
         // is small enough...

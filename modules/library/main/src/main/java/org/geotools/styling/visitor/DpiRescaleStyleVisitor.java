@@ -75,8 +75,17 @@ public class DpiRescaleStyleVisitor extends RescaleStyleVisitor {
             return values;
         }        
     }
-    
-    @Override    
+
+    @Override
+	protected Expression rescaleList(Expression expr) {
+		if (rescaling) {
+            return super.rescaleList(expr);
+        } else {
+            return expr;
+        }
+	}
+
+    @Override
     protected void rescaleOption(Map<String, String> options, String key, double defaultValue) {
         if (rescaling) {
             super.rescaleOption(options, key, defaultValue);

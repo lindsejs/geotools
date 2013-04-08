@@ -39,6 +39,7 @@ import org.geotools.styling.Stroke;
 import org.geotools.styling.TextSymbolizer;
 import org.geotools.styling.TextSymbolizer2;
 import org.opengis.filter.expression.Expression;
+import org.opengis.filter.expression.Function;
 import org.opengis.filter.expression.Literal;
 import org.opengis.style.GraphicalSymbol;
 
@@ -125,8 +126,31 @@ public class UomRescaleStyleVisitor extends DuplicatingStyleVisitor {
     }
 
     /**
+     * Used to rescale the provided unscaled value list.
+     *
+     * @param unscaled
+     *            the unscaled value.
+     * @param mapScale
+     *            the mapScale in pixels per meter.
+     * @param uom
+     *            the unit of measure that will be used to scale.
+     * @return the expression multiplied by the provided scale.
+     */
+    protected Expression rescaleList(Expression unscaled, double mapScale, Unit<Length> uom) {
+        if (unscaled == null || unscaled.equals(Expression.NIL))
+            return unscaled;
+
+		Function func = ff.function("listMultiply", ff.literal(computeRescaleMultiplier(mapScale, uom)), unscaled);
+        if (unscaled instanceof Literal && unscaled.evaluate(null, String.class) != null) {
+            return ff.literal((String)func.evaluate(null));
+        } else {
+            return func;
+        }
+    }
+
+    /**
      * Used to rescale the provided unscaled value.
-     * 
+     *
      * @param unscaled
      *            the unscaled value.
      * @param mapScale
@@ -182,6 +206,10 @@ public class UomRescaleStyleVisitor extends DuplicatingStyleVisitor {
             stroke.setDashOffset(rescale(stroke.getDashOffset(), mapScale, uom));
             rescale(stroke.getGraphicFill(), mapScale, uom);
             rescale(stroke.getGraphicStroke(), mapScale, uom);
+
+			if (stroke.getCustomProperties()!=null && stroke.getCustomProperties().containsKey(Stroke.DYNAMIC_DASHARRAY)) {
+				stroke.getCustomProperties().put(Stroke.DYNAMIC_DASHARRAY, rescaleList((Expression)stroke.getCustomProperties().get(Stroke.DYNAMIC_DASHARRAY), mapScale, uom));
+			}
         }
     }
 

@@ -51,6 +51,8 @@ import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.Polygon;
 
+import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertTrue;
 
 /**
  * Try out our SLD parser and see how well it does.
@@ -170,6 +172,15 @@ public class SLDStyleTest extends TestCase {
         
         validateDashArrayStyle(sld);
     }
+    
+    public void testDashArray3_dynamic() throws Exception {
+    	        // using custom property dynamic-dasharray with expression
+    	        java.net.URL surl = TestData.getResource(this, "dasharray3_dynamic.sld");
+    	        SLDParser stylereader = new SLDParser(sf, surl);
+    	        StyledLayerDescriptor sld = stylereader.parseSLD();
+    	        
+    	        validateDynamicDashArrayStyle(sld);
+    	    }
 
     private void validateDashArrayStyle(StyledLayerDescriptor sld) {
         assertEquals(1, ((UserLayer) sld.getStyledLayers()[0]).getUserStyles().length);
@@ -184,6 +195,23 @@ public class SLDStyleTest extends TestCase {
         LineSymbolizer ls = (LineSymbolizer) symbolizers.get(0);
         assertTrue(Arrays.equals(new float[] {2.0f, 1.0f, 4.0f, 1.0f}, ls.getStroke().getDashArray()));
     }
+    
+    private void validateDynamicDashArrayStyle(StyledLayerDescriptor sld) {
+    	        assertEquals(1, ((UserLayer) sld.getStyledLayers()[0]).getUserStyles().length);
+    	        Style style = ((UserLayer) sld.getStyledLayers()[0]).getUserStyles()[0];
+    	        List<FeatureTypeStyle> fts = style.featureTypeStyles();
+    	        assertEquals(1, fts.size());
+    	        List<Rule> rules = fts.get(0).rules();
+    	        assertEquals(1, rules.size());
+    	        List<Symbolizer> symbolizers = rules.get(0).symbolizers();
+    	        assertEquals(1, symbolizers.size());
+    	        
+    	        LineSymbolizer ls = (LineSymbolizer) symbolizers.get(0);
+    			assertNull(ls.getStroke().getDashArray());
+    			assertNotNull(ls.getStroke().getCustomProperties().get(Stroke.DYNAMIC_DASHARRAY));
+    			Expression e = (Expression)ls.getStroke().getCustomProperties().get(Stroke.DYNAMIC_DASHARRAY);
+    	        assertEquals("2.0 1.0 4.0 1.0", e.evaluate(null));
+    	    }
 
     public void testSLDParserWithWhitespaceIsTrimmed() throws Exception {
     	java.net.URL surl = TestData.getResource(this, "whitespace.sld");

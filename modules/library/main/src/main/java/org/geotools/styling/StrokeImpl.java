@@ -17,6 +17,8 @@
 package org.geotools.styling;
 
 import java.util.Arrays;
+import java.util.Map;
+import java.util.HashMap;
 
 import org.geotools.factory.CommonFactoryFinder;
 import org.geotools.factory.GeoTools;
@@ -49,6 +51,7 @@ public class StrokeImpl implements Stroke, Cloneable {
     private Expression lineJoin;
     private Expression opacity;
     private Expression width;
+	private Map customProps = null;
 
     /**
      * Creates a new instance of Stroke
@@ -388,6 +391,9 @@ public class StrokeImpl implements Stroke, Cloneable {
         out.append("\tFill Graphic " + this.fillGraphic + "\n");
         out.append("\tStroke Graphic " + this.strokeGraphic);
 
+		if (customProps!=null)
+			out.append("\n\tCustom Props " + this.customProps);
+
         return out.toString();
     }
 
@@ -431,6 +437,12 @@ public class StrokeImpl implements Stroke, Cloneable {
                 clone.strokeGraphic = (GraphicImpl) ((Cloneable) strokeGraphic)
                     .clone();
             }
+
+			if (getCustomProperties() != null) {
+				Map map = new HashMap();
+				map.putAll(getCustomProperties());
+				clone.setCustomProperties(map);
+			}
 
             return clone;
         } catch (CloneNotSupportedException e) {
@@ -478,6 +490,10 @@ public class StrokeImpl implements Stroke, Cloneable {
         if (dashArray != null) {
             result = (PRIME * result) + hashCodeDashArray(dashArray);
         }
+
+		if (customProps != null) {
+			result = (PRIME * result) + customProps.hashCode();
+		}
 
         return result;
     }
@@ -557,6 +573,14 @@ public class StrokeImpl implements Stroke, Cloneable {
             return false;
         }
 
+		if (getCustomProperties() != null) {
+			if (!getCustomProperties().equals(other)) {
+				return false;
+			}
+		} else if (other.getCustomProperties() != null) {
+			return false;
+		}
+
         return true;
     }
 
@@ -584,8 +608,19 @@ public class StrokeImpl implements Stroke, Cloneable {
             copy.setOpacity( stroke.getOpacity());
             copy.setWidth(stroke.getWidth());
             
+			if (stroke instanceof Stroke) {
+				copy.setCustomProperties(((Stroke) stroke).getCustomProperties());
+			}
+
             return copy;
         }
     }
 
+	public java.util.Map getCustomProperties() {
+		return customProps;
+	}
+
+	public void setCustomProperties(java.util.Map list) {
+		customProps = list;
+	}
 }

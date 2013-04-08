@@ -17,6 +17,7 @@
 package org.geotools.styling;
 
 import java.awt.Color;
+import java.util.Map;
 
 import org.geotools.filter.ConstantExpression;
 import org.opengis.feature.simple.SimpleFeature;
@@ -329,6 +330,12 @@ public interface Stroke extends org.opengis.style.Stroke {
 
     void accept(org.geotools.styling.StyleVisitor visitor);
 
+	public static final String DYNAMIC_DASHARRAY = "dynamic-dasharray";
+
+	public void setCustomProperties(Map list);
+
+    public Map getCustomProperties();
+
 }
 
 abstract class ConstantStroke implements Stroke {
@@ -381,5 +388,12 @@ abstract class ConstantStroke implements Stroke {
         cannotModifyConstant();
         return null;
     }
-    
+
+	public void setCustomProperties(Map list) {
+	}
+
+    public Map getCustomProperties() {
+        return null;
+    }
+
 }
