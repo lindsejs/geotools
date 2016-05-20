@@ -57,6 +57,7 @@ import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.coverage.grid.GridEnvelope2D;
 import org.geotools.coverage.grid.GridGeometry2D;
 import org.geotools.coverage.grid.InvalidGridGeometryException;
+import org.geotools.coverage.grid.io.AbstractGridFormat;
 import org.geotools.coverage.grid.io.GridCoverage2DReader;
 import org.geotools.data.DataUtilities;
 import org.geotools.data.FeatureSource;
@@ -89,6 +90,7 @@ import org.geotools.map.MapContent;
 import org.geotools.map.MapContext;
 import org.geotools.map.MapLayer;
 import org.geotools.map.StyleLayer;
+import org.geotools.parameter.Parameter;
 import org.geotools.referencing.CRS;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.geotools.referencing.operation.matrix.XAffineTransform;
@@ -2512,13 +2514,41 @@ public class StreamingRenderer implements GTRenderer {
                             paintCommands++;
                         }
                     } else if (grid instanceof GridCoverage2DReader) {
-                        final GeneralParameterValue[] params = (GeneralParameterValue[]) paramsPropertyName
+                        GeneralParameterValue[] params = (GeneralParameterValue[]) paramsPropertyName
                                 .evaluate(drawMe.feature);
+                        
+                        //add interpolation reader param, if not already set
+                        Interpolation interpolation = getRenderingInterpolation(drawMe.layer);
+                        final Parameter<Interpolation> readInterpolation= (Parameter<Interpolation>) AbstractGridFormat.INTERPOLATION.createValue(); 
+                        readInterpolation.setValue(interpolation);
+                        
+                        final int length = params == null ? 0 :params.length;
+                        if (length > 0) {
+                            final String readInterpolationName = AbstractGridFormat.INTERPOLATION.getName().toString();
+                            int i = 0;
+                            boolean foundInterpolation = false;
+                            for (; i < length; i++) {
+                                final String paramName = params[i].getDescriptor().getName().toString();
+                                if(paramName.equalsIgnoreCase(readInterpolationName)){
+                                    ((Parameter) params[i]).setValue(interpolation);
+                                    foundInterpolation = true;
+                                }
+                            }
+                            if (!foundInterpolation) {
+                                List<GeneralParameterValue> paramList = new ArrayList<GeneralParameterValue>();
+                                paramList.addAll(Arrays.asList(params));
+                                paramList.add(readInterpolation);
+                                params = paramList.toArray(new GeneralParameterValue[paramList.size()]);
+                            }
+                        } else { 
+                            List<GeneralParameterValue> paramList = new ArrayList<>();
+                            paramList.add(readInterpolation);
+                            params = paramList.toArray(new GeneralParameterValue[paramList.size()]);
+                        }
                         GridCoverage2DReader reader = (GridCoverage2DReader) grid;
                         requests.put(new RenderCoverageReaderRequest(graphics, reader, params,
                                 (RasterSymbolizer) symbolizer, destinationCrs,
-                                worldToScreenTransform,
-                                getRenderingInterpolation(drawMe.layer)));
+                                worldToScreenTransform, interpolation));
                     }
                 } catch (IllegalArgumentException e) {
                     LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
