@@ -524,7 +524,7 @@ Considerable vendor options are provided for working with TextSymbolizers:
   
 * forceLeftToRight(true): When true forces labels to a readable orientation, when false they make follow the line orientation even if that means the label will look upside down (useful when using TTF symbol fonts to add direction markers along a line)
 
-* goodnessOfFit(90): Sets the percentage of the label that must sit inside the geometry to allow drawing the label. Works only on polygons.
+* goodnessOfFit(0.5) : Sets the ratio of the label that must sit inside the geometry to allow drawing the label. Works only on polygons. Provided values should span from 0 .. 1
 
 * graphic-margin (10) Pixels between the stretched graphic and the text, applies when graphic stretching is in use
   
@@ -560,6 +560,8 @@ Considerable vendor options are provided for working with TextSymbolizers:
 
 * displacementMode: Comma separated list of label displacement directions for point/polygon labels (used along with maxDisplacement). The indicated directions will be tried in turn.
                     Valid values are cardinal directions abbreviations, in particular, N, W, E, S, NW, NE, SW, SE.
+
+* ``fontShrinkSizeMin(0)``\ : lower font size limit that could be used when rendering the label. When set (to a positive value) the rendering process will be applied iteratively by decreasing the initial font size by 1 unit until an acceptable placement location is found or the specified value is reached. Should be set to a value greater than 0 and lower than the symbolizer's font size otherwise it is ignored.  
 
 Raster Symbolizer
 '''''''''''''''''
