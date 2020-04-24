@@ -21,6 +21,7 @@ import java.util.Date;
 import org.geotools.data.jdbc.FilterToSQL;
 import org.geotools.data.postgis.filter.FilterFunction_pgNearest;
 import org.geotools.filter.FilterCapabilities;
+import org.geotools.filter.function.FilterFunction_arrayAnyMatch;
 import org.geotools.jdbc.JDBCDataStore;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.LinearRing;
@@ -177,8 +178,6 @@ public class PostgisFilterToSQL extends FilterToSQL {
      * Overrides base behavior to handler arrays
      *
      * @param filter the comparison to be turned into SQL.
-     * @param extraData
-     * @throws RuntimeException
      */
     protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter, Object extraData)
             throws RuntimeException {
@@ -222,6 +221,7 @@ public class PostgisFilterToSQL extends FilterToSQL {
     public Object visit(PropertyIsEqualTo filter, Object extraData) {
         helper.out = out;
         FilterFunction_pgNearest nearest = helper.getNearestFilter(filter);
+        FilterFunction_arrayAnyMatch any = helper.getArrayAnyMatch(filter);
         if (nearest != null) {
             return helper.visit(
                     nearest,
@@ -239,6 +239,8 @@ public class PostgisFilterToSQL extends FilterToSQL {
                                     throw new RuntimeException(e);
                                 }
                             }));
+        } else if (any != null) {
+            return helper.visit(any, extraData);
         } else {
             return super.visit(filter, extraData);
         }

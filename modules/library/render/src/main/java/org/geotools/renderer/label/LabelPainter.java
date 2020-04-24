@@ -16,6 +16,8 @@
  */
 package org.geotools.renderer.label;
 
+import static org.geotools.styling.TextSymbolizer.GraphicPlacement.INDEPENDENT;
+
 import java.awt.*;
 import java.awt.font.GlyphVector;
 import java.awt.font.LineMetrics;
@@ -83,12 +85,7 @@ public class LabelPainter {
     /** The class in charge of splitting the labels in multiple lines/scripts/fonts */
     LabelSplitter splitter = new LabelSplitter();
 
-    /**
-     * Builds a new painter
-     *
-     * @param graphics
-     * @param outlineRenderingEnabled
-     */
+    /** Builds a new painter */
     public LabelPainter(Graphics2D graphics, LabelRenderingMode labelRenderingMode) {
         this.graphics = graphics;
         this.labelRenderingMode = labelRenderingMode;
@@ -97,8 +94,6 @@ public class LabelPainter {
     /**
      * Sets the current label. The label will be laid out according to the label item settings
      * (curved lines, auto wrapping, curved line usage) and the painter will be ready to draw it.
-     *
-     * @param labelItem
      */
     public void setLabel(LabelCacheItem labelItem) {
         this.labelItem = labelItem;
@@ -157,8 +152,6 @@ public class LabelPainter {
      * If, for any reason, a font size of 0 is provided to the renderer, resulting bounds will
      * become empty and this will ruin most geometric computations dealing with spacing and
      * orientations. Enlarge the envelope a tiny bit
-     *
-     * @param bounds
      */
     void normalizeBounds(Rectangle2D bounds) {
         if (bounds != null && bounds.isEmpty()) {
@@ -166,11 +159,7 @@ public class LabelPainter {
         }
     }
 
-    /**
-     * Returns the current label item
-     *
-     * @return
-     */
+    /** Returns the current label item */
     public LabelCacheItem getLabel() {
         return labelItem;
     }
@@ -178,8 +167,6 @@ public class LabelPainter {
     /**
      * Returns the line height for this label in pixels (for multiline labels, it's the height of
      * the first line)
-     *
-     * @return
      */
     public double getLineHeight() {
         return lines.get(0).getLineHeight();
@@ -189,7 +176,6 @@ public class LabelPainter {
      * Returns appropriate line height for the given displacemntY Should give Top line for max
      * displacementY (1) and Bottom line for min displacemntY (0)
      *
-     * @param displacementY
      * @return height of appropriate line for passed label displacementY
      */
     public double getLineHeightForAnchorY(double anchorY) {
@@ -207,20 +193,12 @@ public class LabelPainter {
         return lines.stream().mapToDouble(l -> l.getLineHeight()).average().orElse(0);
     }
 
-    /**
-     * The full size above the baseline
-     *
-     * @return
-     */
+    /** The full size above the baseline */
     public double getAscent() {
         return lines.get(0).getAscent();
     }
 
-    /**
-     * Returns the width of the label, as painted in straight form (
-     *
-     * @return
-     */
+    /** Returns the width of the label, as painted in straight form ( */
     public int getStraightLabelWidth() {
         return (int) Math.round(getLabelBounds().getWidth());
     }
@@ -228,18 +206,12 @@ public class LabelPainter {
     /**
      * Number of lines for this label (more than 1 if the label has embedded newlines or if we're
      * auto-wrapping it)
-     *
-     * @return
      */
     public int getLineCount() {
         return lines.size();
     }
 
-    /**
-     * Get the straight label bounds, taking into account halo, shield and line wrapping
-     *
-     * @return
-     */
+    /** Get the straight label bounds, taking into account halo, shield and line wrapping */
     public Rectangle2D getFullLabelBounds() {
         // base bounds (clone them, we're going to alter the bounds directly)
         Rectangle2D bounds = (Rectangle2D) getLabelBounds().clone();
@@ -311,11 +283,7 @@ public class LabelPainter {
         }
     }
 
-    /**
-     * Get the straight label bounds, without taking into account halo and shield
-     *
-     * @return
-     */
+    /** Get the straight label bounds, without taking into account halo and shield */
     public Rectangle2D getLabelBounds() {
         return labelBounds;
     }
@@ -323,53 +291,68 @@ public class LabelPainter {
     /**
      * Paints the label as a non curved one. The positioning and rotation are provided by the
      * transformation
-     *
-     * @param transform
-     * @throws Exception
      */
     public void paintStraightLabel(AffineTransform transform) throws Exception {
+        paintStraightLabel(transform, null);
+    }
+
+    /**
+     * Paints the label as a non curved one. The positioning and rotation are provided by the
+     * transformation
+     */
+    public void paintStraightLabel(AffineTransform transform, Coordinate labelPoint)
+            throws Exception {
         AffineTransform oldTransform = graphics.getTransform();
         try {
-            AffineTransform newTransform = new AffineTransform(oldTransform);
-            newTransform.concatenate(transform);
-            graphics.setTransform(newTransform);
 
             // draw the label shield first, underneath the halo
             Style2D graphic = labelItem.getTextStyle().getGraphic();
             if (graphic != null) {
-                // take into account the graphic margins, if any
-                double offsetY = 0;
-                double offsetX = 0;
-                final int[] margin = labelItem.getGraphicMargin();
-                if (margin != null) {
-                    offsetX = margin[1] - margin[3];
-                    offsetY = margin[2] - margin[0];
+
+                Coordinate center;
+                if (labelPoint != null && labelItem.getGraphicPlacement() == INDEPENDENT) {
+                    center = labelPoint;
+                    LiteShape2 tempShape =
+                            new LiteShape2(gf.createPoint(center), null, null, false, false);
+
+                    // resize graphic and transform it based on the position of the last line
+                    graphic = resizeGraphic(graphic);
+                    shapePainter.paint(graphics, tempShape, graphic, graphic.getMaxScale());
+                } else {
+
+                    // take into account the graphic margins, if any
+                    double offsetY = 0;
+                    double offsetX = 0;
+                    final int[] margin = labelItem.getGraphicMargin();
+                    if (margin != null) {
+                        offsetX = margin[1] - margin[3];
+                        offsetY = margin[2] - margin[0];
+                    }
+                    LineInfo lastLine = lines.get(lines.size() - 1);
+
+                    center =
+                            new Coordinate(
+                                    labelBounds.getMinX() + labelBounds.getWidth() / 2.0 + offsetX,
+                                    labelBounds.getMinY()
+                                            + lastLine.getBounds().getHeight()
+                                            - 1.0 * labelBounds.getHeight() / 2.0
+                                            + offsetY);
+                    LiteShape2 tempShape =
+                            new LiteShape2(gf.createPoint(center), null, null, false, false);
+
+                    // resize graphic and transform it based on the position of the last line
+                    graphic = resizeGraphic(graphic);
+                    AffineTransform graphicTx = new AffineTransform(transform);
+
+                    graphicTx.translate(lastLine.getComponents().get(0).getX(), lastLine.getY());
+                    graphics.setTransform(graphicTx);
+                    shapePainter.paint(graphics, tempShape, graphic, graphic.getMaxScale());
                 }
-                LineInfo lastLine = lines.get(lines.size() - 1);
-                LiteShape2 tempShape =
-                        new LiteShape2(
-                                gf.createPoint(
-                                        new Coordinate(
-                                                labelBounds.getMinX()
-                                                        + labelBounds.getWidth() / 2.0
-                                                        + offsetX,
-                                                labelBounds.getMinY()
-                                                        + lastLine.getBounds().getHeight()
-                                                        - 1.0 * labelBounds.getHeight() / 2.0
-                                                        + offsetY)),
-                                null,
-                                null,
-                                false,
-                                false);
-
-                // resize graphic and transform it based on the position of the last line
-                graphic = resizeGraphic(graphic);
-                AffineTransform graphicTx = new AffineTransform(transform);
-
-                graphicTx.translate(lastLine.getComponents().get(0).getX(), lastLine.getY());
-                graphics.setTransform(graphicTx);
-                shapePainter.paint(graphics, tempShape, graphic, graphic.getMaxScale());
             }
+
+            AffineTransform newTransform = new AffineTransform(oldTransform);
+            newTransform.concatenate(transform);
+            graphics.setTransform(newTransform);
 
             // 0 is unfortunately an acceptable value if people only want to draw shields
             // (to leverage conflict resolution, priority when placing symbols)
@@ -399,12 +382,7 @@ public class LabelPainter {
         }
     }
 
-    /**
-     * Resizes the graphic according to the resize mode, label size and margins
-     *
-     * @param graphic
-     * @return
-     */
+    /** Resizes the graphic according to the resize mode, label size and margins */
     private Style2D resizeGraphic(Style2D graphic) {
         final GraphicResize mode = labelItem.graphicsResize;
 
@@ -502,11 +480,7 @@ public class LabelPainter {
         }
     }
 
-    /**
-     * Draws the glyph vector respecting the label item options
-     *
-     * @param gv
-     */
+    /** Draws the glyph vector respecting the label item options */
     private void drawGlyphVector(LineComponent component) {
         LineMetrics metrics = computeLineMetricsIfNeeded(component);
         GlyphVector gv = component.getGlyphVector();
@@ -639,11 +613,7 @@ public class LabelPainter {
         graphics.setComposite(comp);
     }
 
-    /**
-     * Paints a label that follows the line, centered in the current cursor position
-     *
-     * @param cursor
-     */
+    /** Paints a label that follows the line, centered in the current cursor position */
     public void paintCurvedLabel(LineStringCursor cursor) {
         // 0 is unfortunately an acceptable value if people only want to draw shields
         if (labelItem.getTextStyle().getFont().getSize() == 0) return;
@@ -882,9 +852,6 @@ public class LabelPainter {
      * Returns true if a label placed in the current cursor position would look upwards or not,
      * defining upwards a label whose bottom to top direction is greater than zero, and less or
      * equal to 180 degrees.
-     *
-     * @param cursor
-     * @return
      */
     boolean isLabelUpwards(LineStringCursor cursor) {
         // label angle is orthogonal to the line direction

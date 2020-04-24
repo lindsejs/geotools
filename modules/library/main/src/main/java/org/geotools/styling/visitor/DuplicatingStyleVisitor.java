@@ -136,11 +136,7 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
         this.STRICT = false;
     }
 
-    /**
-     * True if we should enforce equality after a copy.
-     *
-     * @param strict
-     */
+    /** True if we should enforce equality after a copy. */
     public void setStrict(boolean strict) {
         STRICT = strict;
     }
@@ -263,6 +259,7 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
         copy.setName(style.getName());
         copy.getDescription().setTitle(style.getDescription().getTitle());
         copy.featureTypeStyles().addAll(ftsCopy);
+        copy.setBackground(copy(style.getBackground()));
 
         if (STRICT && !copy.equals(style)) {
             throw new IllegalStateException("Was unable to duplicate provided Style:" + style);
@@ -358,7 +355,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
     /**
      * Copy list of expressions.
      *
-     * @param expressions
      * @return copy of expressions or null if list was null
      */
     protected List<Expression> copyExpressions(List<Expression> expressions) {
@@ -379,7 +375,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
      * copy.setBackgroundColor( copyExpr( fill.getColor()) );
      * </code></pre>
      *
-     * @param sion
      * @return copy of expression or null if expression was null
      */
     protected Expression copy(Expression expression) {
@@ -396,7 +391,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
     /**
      * Null safe graphic copy
      *
-     * @param graphic
      * @return copy of graphic or null if not provided
      */
     protected Graphic copy(Graphic graphic) {
@@ -409,7 +403,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
     /**
      * Null safe fill copy
      *
-     * @param graphic
      * @return copy of graphic or null if not provided
      */
     protected Fill copy(Fill fill) {
@@ -422,7 +415,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
     /**
      * Null safe copy of float array.
      *
-     * @param array
      * @return copy of array or null if not provided
      */
     protected float[] copy(float[] array) {
@@ -436,7 +428,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
     /**
      * Null safe map copy, used for external graphic custom properties.
      *
-     * @param customProperties
      * @return copy of map
      */
     @SuppressWarnings("unchecked")
@@ -448,7 +439,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
     /**
      * Null safe copy of stroke.
      *
-     * @param stroke
      * @return copy of stroke if provided
      */
     protected Stroke copy(Stroke stroke) {
@@ -460,7 +450,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
     /**
      * Null safe copy of shaded relief.
      *
-     * @param shaded
      * @return copy of shaded or null if not provided
      */
     protected ShadedRelief copy(ShadedRelief shaded) {
@@ -475,7 +464,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
     /**
      * Null safe copy of description
      *
-     * @param shaded
      * @return copy of shaded or null if not provided
      */
     protected Description copy(Description desc) {
@@ -582,7 +570,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
      *
      * <p>Right now style visitor does not let us visit fonts!
      *
-     * @param fonts
      * @return copy of provided fonts
      */
     protected List<Font> copyFonts(List<Font> fonts) {
@@ -611,7 +598,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
     /**
      * Null safe copy of halo.
      *
-     * @param halo
      * @return copy of halo if provided
      */
     protected Halo copy(Halo halo) {
@@ -623,7 +609,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
     /**
      * Null safe copy of displacement.
      *
-     * @param displacement
      * @return copy of displacement if provided
      */
     protected Displacement copy(Displacement displacement) {
@@ -647,7 +632,6 @@ public class DuplicatingStyleVisitor implements StyleVisitor {
     /**
      * Null safe copy of anchor point.
      *
-     * @param anchorPoint
      * @return copy of anchor point if provided
      */
     protected AnchorPoint copy(AnchorPoint anchorPoint) {

@@ -321,6 +321,24 @@ public interface TextSymbolizer extends org.opengis.style.TextSymbolizer, Symbol
         }
     }
 
+    /** Placement of the graphic element, see GraphicPlacement enumeration for possible value */
+    public static final String GRAPHIC_PLACEMENT_KEY = "graphicPlacement";
+
+    /** GraphicPlacemnts controls the position of the Graphic associated with the label */
+    public static enum GraphicPlacement {
+        /**
+         * Centered with the label, thus moving with it considering its offsets and anchors relative
+         * to the label point. If not specified, this is the default behavior.
+         */
+        LABEL,
+        /**
+         * Places the graphic independent of the label own offset and anchor, but applying the
+         * Graphic offset and anchor instead, on top of the chosen label point. This allows to
+         * create graphics that are at an offset compared to the label
+         */
+        INDEPENDENT
+    }
+
     /**
      * Returns the expression that will be evaluated to determine what text is displayed.
      *
@@ -352,8 +370,6 @@ public interface TextSymbolizer extends org.opengis.style.TextSymbolizer, Symbol
     /**
      * Set initial font used to render label. This will replace the initial entry in the {@link
      * #fonts()} list.
-     *
-     * @param font
      */
     public void setFont(org.opengis.style.Font font);
 

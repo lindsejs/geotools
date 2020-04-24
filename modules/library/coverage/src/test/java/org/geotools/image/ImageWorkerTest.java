@@ -146,19 +146,15 @@ public final class ImageWorkerTest extends GridProcessingTestBase {
             smallWorld,
             gray,
             grayAlpha,
-            imageWithNodata;
+            imageWithNodata,
+            imageWithNodata2;
 
     /** {@code true} if the image should be visualized. */
     private static final boolean SHOW = TestData.isInteractiveTest();
 
     private static BufferedImage worldDEMImage = null;
 
-    /**
-     * Creates a simple 128x128 {@link RenderedImage} for testing purposes.
-     *
-     * @param maximum
-     * @return
-     */
+    /** Creates a simple 128x128 {@link RenderedImage} for testing purposes. */
     private static RenderedImage getSynthetic(final double maximum) {
         final int width = 128;
         final int height = 128;
@@ -187,7 +183,6 @@ public final class ImageWorkerTest extends GridProcessingTestBase {
      *
      * @param direct <code>true</code> when we request a {@link DirectColorModel}, <code>false
      *     </code> otherwise.
-     * @return
      */
     private static BufferedImage getSyntheticRGB(final boolean direct) {
         final int width = 128;
@@ -216,7 +211,6 @@ public final class ImageWorkerTest extends GridProcessingTestBase {
      *
      * @param direct <code>true</code> when we request a {@link DirectColorModel}, <code>false
      *     </code> otherwise.
-     * @return
      */
     private static BufferedImage getSyntheticRGB(Color color, int sideSize) {
         final int width = sideSize;
@@ -243,7 +237,6 @@ public final class ImageWorkerTest extends GridProcessingTestBase {
      *
      * @param direct <code>true</code> when we request a {@link DirectColorModel}, <code>false
      *     </code> otherwise.
-     * @return
      */
     private static BufferedImage getSyntheticSolidGray(byte gray, int sideSize) {
         final int width = sideSize;
@@ -258,11 +251,7 @@ public final class ImageWorkerTest extends GridProcessingTestBase {
         return image;
     }
 
-    /**
-     * Creates a test paletted image with translucency.
-     *
-     * @return
-     */
+    /** Creates a test paletted image with translucency. */
     private static BufferedImage getSyntheticTranslucentIndexed() {
         final byte bb[] = new byte[256];
         for (int i = 0; i < 256; i++) bb[i] = (byte) i;
@@ -276,11 +265,7 @@ public final class ImageWorkerTest extends GridProcessingTestBase {
         return new BufferedImage(icm, raster, false, null);
     }
 
-    /**
-     * Creates a test paletted image with nodata and no transparency
-     *
-     * @return
-     */
+    /** Creates a test paletted image with nodata and no transparency */
     private static RenderedImage getIndexedRGBNodata() {
         // a palette with just the first 200 entries filled, the others are all zero (but present!)
         final byte bb[] = new byte[256];
@@ -312,11 +297,7 @@ public final class ImageWorkerTest extends GridProcessingTestBase {
         return planarImage;
     }
 
-    /**
-     * Creates a test paletted image with a given number of entries in the map
-     *
-     * @return
-     */
+    /** Creates a test paletted image with a given number of entries in the map */
     private static BufferedImage getSyntheticGrayIndexed(int entries) {
         final byte bb[] = new byte[entries];
         for (int i = 0; i < entries; i++) bb[i] = (byte) i;
@@ -383,6 +364,12 @@ public final class ImageWorkerTest extends GridProcessingTestBase {
         if (imageWithNodata == null) {
             final InputStream input = org.geotools.test.TestData.openStream(this, "nodataD.tiff");
             imageWithNodata = ImageIO.read(input);
+            input.close();
+        }
+
+        if (imageWithNodata2 == null) {
+            final InputStream input = org.geotools.test.TestData.openStream(this, "nodata.tiff");
+            imageWithNodata2 = ImageIO.read(input);
             input.close();
         }
     }
@@ -927,10 +914,6 @@ public final class ImageWorkerTest extends GridProcessingTestBase {
     /**
      * Tests the {@link ImageWorker#makeColorTransparent} methods. Some trivial tests are performed
      * before.
-     *
-     * @throws IOException
-     * @throws FileNotFoundException
-     * @throws IllegalStateException
      */
     @Test
     public void testMakeColorTransparent()
@@ -1610,25 +1593,17 @@ public final class ImageWorkerTest extends GridProcessingTestBase {
 
     @Test
     public void testRescaleNoData() {
-        // Getting input gray scale image
-        ImageWorker w = new ImageWorker(gray);
-        // Removing optional Alpha band
-        w.retainFirstBand();
-        // Formatting to int (avoid to convert values greater to 127 into negative values during
-        // rescaling)
-        w.format(DataBuffer.TYPE_INT);
+        ImageWorker w = new ImageWorker(imageWithNodata2);
         // Setting NoData
-        Range noData = RangeFactory.create(0, 0);
+        Range noData = RangeFactory.create(-10000, -10000);
         w.setNoData(noData);
-        // Setting background to 10
-        w.setBackground(new double[] {10d});
-        // Rescaling data
-        w.rescale(new double[] {2}, new double[] {2});
+        w.setBackground(new double[] {0});
+        w.rescale(new double[] {0.002}, new double[] {2});
 
-        // Getting Minimum value, It cannot be equal or lower than the offset value (2)
+        // Getting Minimum value, It cannot be equal or lower than the offset value
         double minimum = w.getMinimums()[0];
         assertTrue(minimum > 2);
-        assertNoData(w.getRenderedImage(), noData);
+        assertNoData(w.getRenderedImage(), RangeFactory.create((byte) 0, (byte) 0));
     }
 
     @Test
@@ -1711,6 +1686,31 @@ public final class ImageWorkerTest extends GridProcessingTestBase {
         RenderedImage image = iw.bandMerge(4).getRenderedImage();
         assertEquals(4, image.getTile(0, 0).getSampleModel().getNumBands());
         assertNoData(image, null);
+    }
+
+    @Test
+    public void testBandMergeWithNodata() throws FileNotFoundException, IOException {
+        double noDataValue = -10000d;
+        Range nodata = RangeFactory.create(noDataValue, noDataValue);
+        double[] background = new double[] {noDataValue};
+
+        RenderedImage twoBands = null;
+        PlanarImage pi = PlanarImage.wrapRenderedImage(imageWithNodata2);
+        pi.setProperty("GC_NODATA", new NoDataContainer(nodata));
+
+        ImageWorker worker = new ImageWorker(pi).setNoData(nodata).setBackground(background);
+
+        twoBands = worker.addBand(worker.getRenderedImage(), false).getRenderedImage();
+        RenderedImage oneBand = new ImageWorker(twoBands).retainBands(1).getRenderedImage();
+        RenderedImage threeBands =
+                new ImageWorker(twoBands).addBand(oneBand, false).getRenderedImage();
+
+        // Check that the noData holes are still noData after bandMerge
+        double[] threeSamples = new double[3];
+        threeBands.getData().getPixel(18, 18, threeSamples);
+        for (double sample : threeSamples) {
+            assertEquals(noDataValue, sample, 1E-6);
+        }
     }
 
     static void assertNoData(ImageWorker worker, Range nodata) {
@@ -2364,5 +2364,29 @@ public final class ImageWorkerTest extends GridProcessingTestBase {
                 histogram.getBins(0),
                 CoreMatchers.equalTo(
                         new int[] {expectedCountBin1, expectedCountBin2, expectedCountBin3}));
+    }
+
+    @Test
+    public void testHistogramRecalculationWithDifferentParameters() {
+        ImageWorker iw = new ImageWorker(getSynthetic(1000)).setXPeriod(32).setYPeriod(32);
+        double[] minimums = iw.getMinimums();
+        double[] maximums = iw.getMaximums();
+        Histogram histogram = iw.getHistogram(new int[] {1}, minimums, maximums);
+        Histogram histogram2 =
+                iw.getHistogram(
+                        new int[] {1},
+                        new double[] {minimums[0] + 1.0},
+                        new double[] {maximums[0] - 1.0});
+        assertTrue(histogram.getBins(0)[0] != histogram2.getBins(0)[0]);
+    }
+
+    @Test
+    public void testGetCachedHistogramWithSameParameters() {
+        ImageWorker iw = new ImageWorker(getSynthetic(1000)).setXPeriod(32).setYPeriod(32);
+        double[] minimums = iw.getMinimums();
+        double[] maximums = iw.getMaximums();
+        Histogram histogram = iw.getHistogram(new int[] {1}, minimums, maximums);
+        Histogram histogram2 = iw.getHistogram(new int[] {1}, minimums, maximums);
+        assertTrue(histogram.getBins(0)[0] == histogram2.getBins(0)[0]);
     }
 }

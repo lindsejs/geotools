@@ -20,8 +20,15 @@ import static java.lang.Math.abs;
 
 import com.conversantmedia.util.concurrent.PushPullBlockingQueue;
 import com.conversantmedia.util.concurrent.SpinPolicy;
-import java.awt.*;
+import java.awt.AlphaComposite;
+import java.awt.Color;
+import java.awt.Composite;
+import java.awt.Graphics2D;
+import java.awt.Paint;
+import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.RenderingHints.Key;
+import java.awt.Shape;
 import java.awt.font.GlyphVector;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.NoninvertibleTransformException;
@@ -54,11 +61,11 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.media.jai.Interpolation;
+import javax.media.jai.JAI;
 import javax.media.jai.PlanarImage;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.coverage.grid.GridEnvelope2D;
 import org.geotools.coverage.grid.GridGeometry2D;
-import org.geotools.coverage.grid.InvalidGridGeometryException;
 import org.geotools.coverage.grid.io.GridCoverage2DReader;
 import org.geotools.coverage.util.FeatureUtilities;
 import org.geotools.data.DataUtilities;
@@ -107,9 +114,9 @@ import org.geotools.renderer.crs.ProjectionHandlerFinder;
 import org.geotools.renderer.crs.WrappingProjectionHandler;
 import org.geotools.renderer.label.LabelCacheImpl;
 import org.geotools.renderer.label.LabelCacheImpl.LabelRenderingMode;
-import org.geotools.renderer.lite.gridcoverage2d.GridCoverageReaderHelper;
 import org.geotools.renderer.lite.gridcoverage2d.GridCoverageRenderer;
 import org.geotools.renderer.style.LineStyle2D;
+import org.geotools.renderer.style.MarkAlongLine;
 import org.geotools.renderer.style.SLDStyleFactory;
 import org.geotools.renderer.style.Style2D;
 import org.geotools.renderer.style.StyleAttributeExtractor;
@@ -118,6 +125,7 @@ import org.geotools.styling.PointSymbolizer;
 import org.geotools.styling.RasterSymbolizer;
 import org.geotools.styling.Rule;
 import org.geotools.styling.RuleImpl;
+import org.geotools.styling.Style;
 import org.geotools.styling.StyleFactory;
 import org.geotools.styling.Symbolizer;
 import org.geotools.styling.TextSymbolizer;
@@ -148,7 +156,6 @@ import org.opengis.filter.expression.PropertyName;
 import org.opengis.filter.sort.SortBy;
 import org.opengis.parameter.GeneralParameterValue;
 import org.opengis.referencing.FactoryException;
-import org.opengis.referencing.NoSuchAuthorityCodeException;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import org.opengis.referencing.crs.SingleCRS;
 import org.opengis.referencing.datum.PixelInCell;
@@ -435,11 +442,7 @@ public class StreamingRenderer implements GTRenderer {
      */
     public StreamingRenderer() {}
 
-    /**
-     * Sets a thread pool to be used in parallel rendering
-     *
-     * @param threadPool
-     */
+    /** Sets a thread pool to be used in parallel rendering */
     public void setThreadPool(ExecutorService threadPool) {
         this.threadPool = threadPool;
     }
@@ -873,6 +876,12 @@ public class StreamingRenderer implements GTRenderer {
                         return;
                     }
 
+                    // handle the background color specification, if any
+                    Style style = layer.getStyle();
+                    if (style != null && style.getBackground() != null) {
+                        fillBackground(graphics, paintArea, style);
+                    }
+
                     labelCache.startLayer(layerId);
                     if (layer instanceof DirectLayer) {
                         RenderingRequest request =
@@ -974,10 +983,22 @@ public class StreamingRenderer implements GTRenderer {
         }
     }
 
+    protected void fillBackground(Graphics2D graphics, Rectangle paintArea, Style style) {
+        // get the paint, could be a repeated image too (TexturePaint)
+        Paint background = styleFactory.getPaint(style.getBackground(), null, null);
+        graphics.setPaint(background);
+        // the opacity we need only if the paint is solid, otherwise the graphic fill
+        // machinery has already given us the right composite for it
+        if (background instanceof Color) {
+            Composite composite = styleFactory.getComposite(style.getBackground(), null);
+            graphics.setComposite(composite);
+        }
+        // and fill it
+        graphics.fill(paintArea);
+    }
+
     /**
      * Builds the blocking queue used to bridge between the data loading thread and the painting one
-     *
-     * @return
      */
     protected BlockingQueue<RenderingRequest> getRequestsQueue() {
         return new RenderingBlockingQueue(10000);
@@ -1029,16 +1050,10 @@ public class StreamingRenderer implements GTRenderer {
      * paint(Graphics2D, Rectangle, AffineTransform)</code>. It is package protected just to allow
      * unit testing it.
      *
-     * @param schema
-     * @param source
      * @param envelope the spatial extent which is the target area of the rendering process
-     * @param sourceCrs
-     * @param screenSize
-     * @param geometryAttribute
      * @return the set of features resulting from <code>currLayer</code> after querying its feature
      *     source
      * @throws IllegalFilterException if something goes wrong constructing the bbox filter
-     * @throws IOException
      */
     /*
      * Default visibility for testing purposes
@@ -1315,13 +1330,17 @@ public class StreamingRenderer implements GTRenderer {
         return query;
     }
 
-    private ReferencedEnvelope transformEnvelope(
+    protected ReferencedEnvelope transformEnvelope(
             ReferencedEnvelope envelope, CoordinateReferenceSystem crs)
             throws TransformException, FactoryException {
         try {
             ProjectionHandler projectionHandler =
                     ProjectionHandlerFinder.getHandler(envelope, crs, isMapWrappingEnabled());
-            return projectionHandler.getProjectedEnvelope(envelope, crs);
+            if (projectionHandler != null) {
+                return projectionHandler.getProjectedEnvelope(envelope, crs);
+            } else {
+                return envelope.transform(crs, true);
+            }
         } catch (FactoryException e) {
             return envelope.transform(crs, true);
         }
@@ -1349,9 +1368,6 @@ public class StreamingRenderer implements GTRenderer {
     /**
      * Returns the sort-by from the list of feature type styles for a given layer. The code assumes
      * the styles have already been classified and are uniform in sorting clauses
-     *
-     * @param styles
-     * @return
      */
     private SortBy[] getSortByFromLiteStyles(List<LiteFeatureTypeStyle> styles) {
         if (styles != null) {
@@ -1378,13 +1394,7 @@ public class StreamingRenderer implements GTRenderer {
         return definitionQuery;
     }
 
-    /**
-     * Takes care of eventual geometric transformations
-     *
-     * @param styles
-     * @param envelope
-     * @return
-     */
+    /** Takes care of eventual geometric transformations */
     ReferencedEnvelope expandEnvelopeByTransformations(
             List<LiteFeatureTypeStyle> styles, ReferencedEnvelope envelope) {
         GeometryTransformationVisitor visitor = new GeometryTransformationVisitor();
@@ -1447,8 +1457,6 @@ public class StreamingRenderer implements GTRenderer {
      * the {@link MathTransform2D} returned here will transition from WGS84 to the requested
      * destCRS.
      *
-     * @param sourceCRS
-     * @param destCRS
      * @return the transform, or null if any of the crs is null, or if the the two crs are equal
      * @throws FactoryException If no transform is available to the destCRS
      */
@@ -1489,9 +1497,6 @@ public class StreamingRenderer implements GTRenderer {
     /**
      * Scans the schema for the specified attributes are returns a single CRS if all the geometric
      * attributes in the lot share one CRS, null if there are different ones
-     *
-     * @param schema
-     * @return
      */
     private CoordinateReferenceSystem getNativeCRS(
             FeatureType schema, List<PropertyName> attNames) {
@@ -1532,9 +1537,6 @@ public class StreamingRenderer implements GTRenderer {
      * when your filters really mean you're secretly asking for all the data in which case sending
      * the filters to the Datastore actually costs you. But, databases are *much* faster at
      * processing the Filters than JAVA is and can use statistical analysis to do it.
-     *
-     * @param styles
-     * @param q
      */
     private void processRuleForQuery(List<LiteFeatureTypeStyle> styles, Query q) {
         try {
@@ -1618,11 +1620,7 @@ public class StreamingRenderer implements GTRenderer {
         return Boolean.TRUE.equals(result);
     }
 
-    /**
-     * Checks if the advanced projection handling is enabled
-     *
-     * @return
-     */
+    /** Checks if the advanced projection handling is enabled */
     private boolean isAdvancedProjectionHandlingEnabled() {
         if (rendererHints == null) return false;
         Object result = rendererHints.get(ADVANCED_PROJECTION_HANDLING_KEY);
@@ -1630,11 +1628,7 @@ public class StreamingRenderer implements GTRenderer {
         return Boolean.TRUE.equals(result);
     }
 
-    /**
-     * Checks if continuous map wrapping is enabled
-     *
-     * @return
-     */
+    /** Checks if continuous map wrapping is enabled */
     private boolean isMapWrappingEnabled() {
         if (rendererHints == null) return false;
         Object result = rendererHints.get(CONTINUOUS_MAP_WRAPPING);
@@ -1646,8 +1640,6 @@ public class StreamingRenderer implements GTRenderer {
      * Checks if the geometries in spatial filters in the SLD must be assumed to be expressed in the
      * official EPSG axis order, regardless of how the referencing subsystem is configured (this is
      * required to support filter reprojection in WMS 1.3+)
-     *
-     * @return
      */
     private boolean isEPSGAxisOrderForced() {
         if (rendererHints == null) return false;
@@ -1900,7 +1892,6 @@ public class StreamingRenderer implements GTRenderer {
      * FeatureTypeStyles removed
      *
      * @return ArrayList<LiteFeatureTypeStyle>
-     * @throws FactoryException
      */
     ArrayList<LiteFeatureTypeStyle> createLiteFeatureTypeStyles(
             Layer layer, Graphics2D graphics, boolean optimizedFTSRendering)
@@ -1986,9 +1977,6 @@ public class StreamingRenderer implements GTRenderer {
     /**
      * Returns true if the ScreenMap optimization can be applied given the current renderer and
      * configuration and the style to be applied
-     *
-     * @param lfts
-     * @return
      */
     boolean screenMapEnabled(LiteFeatureTypeStyle lfts) {
         if (generalizationDistance == 0.0) {
@@ -2134,7 +2122,6 @@ public class StreamingRenderer implements GTRenderer {
      * @param graphics Target graphics for rendering
      * @param layer The layer being styled
      * @param layerId Handle used to identify the layer in the {@link LabelCache}
-     * @throws Exception
      */
     private void processStylers(final Graphics2D graphics, final Layer layer, String layerId)
             throws Exception {
@@ -2246,31 +2233,7 @@ public class StreamingRenderer implements GTRenderer {
             // the one attached to the layer and then one coming from SLD.
             // The first source attributes, the latter talks tx output attributes
             // so they have to be applied before and after the transformation respectively
-            RenderingTransformationHelper helper =
-                    new RenderingTransformationHelper() {
-
-                        @Override
-                        protected GridCoverage2D readCoverage(
-                                GridCoverage2DReader reader,
-                                Object readParams,
-                                GridGeometry2D readGG)
-                                throws IOException {
-                            Interpolation interpolation = getRenderingInterpolation(layer);
-                            GridCoverageReaderHelper helper;
-                            try {
-                                helper =
-                                        new GridCoverageReaderHelper(
-                                                reader,
-                                                readGG.getGridRange2D(),
-                                                ReferencedEnvelope.reference(
-                                                        readGG.getEnvelope2D()),
-                                                interpolation);
-                                return helper.readCoverage((GeneralParameterValue[]) readParams);
-                            } catch (InvalidGridGeometryException | FactoryException e) {
-                                throw new IOException("Failure reading the coverage", e);
-                            }
-                        }
-                    };
+            RenderingTransformationHelper helper = new GCRRenderingTransformationHelper(layer);
 
             Object result =
                     helper.applyRenderingTransformation(
@@ -2384,9 +2347,6 @@ public class StreamingRenderer implements GTRenderer {
     /**
      * Checks the attributes in the query (which we got from the SLD) match the schema, throws an
      * {@link IllegalFilterException} otherwise
-     *
-     * @param schema
-     * @param attributeNames
      */
     void checkAttributeExistence(FeatureType schema, Query query) {
         if (query.getProperties() == null) {
@@ -2422,8 +2382,6 @@ public class StreamingRenderer implements GTRenderer {
     /**
      * Applies Unit Of Measure rescaling against all symbolizers, the result will be symbolizers
      * that operate purely in pixels
-     *
-     * @param lfts
      */
     void applyUnitRescale(final ArrayList<LiteFeatureTypeStyle> lfts) {
         // apply dpi rescale
@@ -2450,10 +2408,6 @@ public class StreamingRenderer implements GTRenderer {
     /**
      * Reprojects the spatial filters in each {@link LiteFeatureTypeStyle} so that they match the
      * feature source native coordinate system
-     *
-     * @param lfts
-     * @param fs
-     * @throws FactoryException
      */
     void reprojectSpatialFilters(final ArrayList<LiteFeatureTypeStyle> lfts, FeatureType schema)
             throws FactoryException {
@@ -2465,14 +2419,7 @@ public class StreamingRenderer implements GTRenderer {
         }
     }
 
-    /**
-     * Computes the declared SRS of a layer based on the layer schema and the EPSG forcing flag
-     *
-     * @param schema
-     * @return
-     * @throws FactoryException
-     * @throws NoSuchAuthorityCodeException
-     */
+    /** Computes the declared SRS of a layer based on the layer schema and the EPSG forcing flag */
     private CoordinateReferenceSystem getDeclaredSRS(FeatureType schema) throws FactoryException {
         // compute the default SRS of the feature source
         CoordinateReferenceSystem declaredCRS = schema.getCoordinateReferenceSystem();
@@ -2488,11 +2435,6 @@ public class StreamingRenderer implements GTRenderer {
     /**
      * Reprojects all spatial filters in the specified Query so that they match the native srs of
      * the specified feature source
-     *
-     * @param query
-     * @param source
-     * @return
-     * @throws FactoryException
      */
     private Query reprojectQuery(Query query, FeatureSource<FeatureType, Feature> source)
             throws FactoryException {
@@ -2582,12 +2524,7 @@ public class StreamingRenderer implements GTRenderer {
         return reprojected;
     }
 
-    /**
-     * Utility method to apply the two rescale visitors without duplicating code
-     *
-     * @param fts
-     * @param visitor
-     */
+    /** Utility method to apply the two rescale visitors without duplicating code */
     void rescaleFeatureTypeStyle(LiteFeatureTypeStyle fts, DuplicatingStyleVisitor visitor) {
         for (int i = 0; i < fts.ruleList.length; i++) {
             visitor.visit(fts.ruleList[i]);
@@ -2621,6 +2558,28 @@ public class StreamingRenderer implements GTRenderer {
                 boolean cloningRequired = isCloningRequired(lfts);
                 RenderableFeature rf = createRenderableFeature(layerId, cloningRequired);
                 rf.layer = liteFeatureTypeStyle.layer;
+
+                ProjectionHandler handler = liteFeatureTypeStyle.projectionHandler;
+                // Check if a reprojection has been made, in that case, let's update the projection
+                // Handler
+                CoordinateReferenceSystem featureCrs =
+                        features.getSchema().getCoordinateReferenceSystem();
+                if (liteFeatureTypeStyle.projectionHandler != null
+                        && featureCrs != null
+                        && !CRS.equalsIgnoreMetadata(
+                                liteFeatureTypeStyle.projectionHandler.getSourceCRS(),
+                                featureCrs)) {
+                    try {
+                        handler =
+                                ProjectionHandlerFinder.getHandler(
+                                        mapExtent,
+                                        features.getSchema().getCoordinateReferenceSystem(),
+                                        isMapWrappingEnabled());
+                    } catch (FactoryException e) {
+                        fireErrorEvent(e);
+                    }
+                }
+
                 rf.setScreenMap(liteFeatureTypeStyle.screenMap);
                 // loop exit condition tested inside try catch
                 // make sure we test hasNext() outside of the try/cath that follows, as that
@@ -2629,7 +2588,7 @@ public class StreamingRenderer implements GTRenderer {
                 // an infinite loop
                 while (featureIterator.hasNext() && !renderingStopRequested) {
                     rf.setFeature(featureIterator.next());
-                    processFeature(rf, liteFeatureTypeStyle);
+                    processFeature(rf, liteFeatureTypeStyle, handler);
                 }
             }
 
@@ -2648,9 +2607,7 @@ public class StreamingRenderer implements GTRenderer {
     /**
      * Builds a new renderable feature for the given layerId and set of lite feature type styles
      *
-     * @param layerId
      * @param cloningRequired TODO
-     * @return
      */
     RenderableFeature createRenderableFeature(String layerId, boolean cloningRequired) {
         RenderableFeature rf = new RenderableFeature(layerId, cloningRequired);
@@ -2682,7 +2639,8 @@ public class StreamingRenderer implements GTRenderer {
                 rf.setFeature(iterator.next());
                 // draw the feature on the main graphics and on the eventual extra image buffers
                 for (LiteFeatureTypeStyle liteFeatureTypeStyle : lfts) {
-                    processFeature(rf, liteFeatureTypeStyle);
+                    processFeature(
+                            rf, liteFeatureTypeStyle, liteFeatureTypeStyle.projectionHandler);
                 }
             }
             // submit the merge request
@@ -2766,17 +2724,13 @@ public class StreamingRenderer implements GTRenderer {
                 || !Collections.disjoint(filterAndSymbolizerProperties, txGeometries);
     }
 
-    /**
-     * @param rf
-     * @param feature
-     * @param fts
-     * @param layerId
-     */
-    void processFeature(RenderableFeature rf, LiteFeatureTypeStyle fts) {
+    /** */
+    void processFeature(
+            RenderableFeature rf, LiteFeatureTypeStyle fts, ProjectionHandler projectionHandler) {
         try {
             // init the renderable feature for this fts
             rf.inMemoryGeneralization = fts.inMemoryGeneralization;
-            rf.projectionHandler = fts.projectionHandler;
+            rf.projectionHandler = projectionHandler;
             rf.setScreenMap(fts.screenMap);
             rf.layer = fts.layer;
             rf.metaBuffer = fts.metaBuffer;
@@ -2832,16 +2786,9 @@ public class StreamingRenderer implements GTRenderer {
      *
      * <p>This is an internal method and should only be called by processStylers.
      *
-     * @param currLayer
-     * @param graphics
      * @param drawMe The feature to be rendered
      * @param symbolizers An array of symbolizers which actually perform the rendering. The scale
      *     range we are working on... provided in order to make the style factory happy
-     * @param shape
-     * @param destinationCrs
-     * @param layerId
-     * @throws TransformException
-     * @throws FactoryException
      */
     private int processSymbolizers(
             final Graphics2D graphics,
@@ -2981,6 +2928,18 @@ public class StreamingRenderer implements GTRenderer {
                             OffsetCurveBuilder offseter = new OffsetCurveBuilder(offset);
                             g = offseter.offset(g);
                         }
+                    } else if (style instanceof LineStyle2D) {
+                        if (((LineStyle2D) style).getStroke() instanceof MarkAlongLine) {
+                            double simplificationFactor =
+                                    ((MarkAlongLine) ((LineStyle2D) style).getStroke())
+                                            .getSimplificatorFactor();
+                            if (simplificationFactor != 0) {
+                                Decimator d =
+                                        new Decimator(simplificationFactor, simplificationFactor);
+                                g = source;
+                                d.decimate(g);
+                            }
+                        }
                     }
                     if (g == null) {
                         continue;
@@ -3006,11 +2965,6 @@ public class StreamingRenderer implements GTRenderer {
      * Builds a raster grid geometry that will be used for reading, taking into account the original
      * map extent and target paint area, and expanding the target raster area by {@link
      * #REPROJECTION_RASTER_GUTTER}
-     *
-     * @param destinationCrs
-     * @param sourceCRS
-     * @return
-     * @throws NoninvertibleTransformException
      */
     GridGeometry2D getRasterGridGeometry(
             CoordinateReferenceSystem destinationCrs, CoordinateReferenceSystem sourceCRS)
@@ -3073,7 +3027,6 @@ public class StreamingRenderer implements GTRenderer {
     /**
      * Finds the geometric attribute coordinate reference system.
      *
-     * @param drawMe2
      * @param f The feature
      * @param s The symbolizer
      * @return The geometry requested in the symbolizer, or the default geometry if none is
@@ -3102,13 +3055,7 @@ public class StreamingRenderer implements GTRenderer {
         return null;
     }
 
-    /**
-     * Finds the CRS of the specified attribute (or uses the default geometry instead)
-     *
-     * @param geomName
-     * @param schema
-     * @return
-     */
+    /** Finds the CRS of the specified attribute (or uses the default geometry instead) */
     org.opengis.referencing.crs.CoordinateReferenceSystem getAttributeCRS(
             PropertyName geomName, FeatureType schema) {
         if (geomName == null || "".equals(geomName.getPropertyName())) {
@@ -3180,8 +3127,6 @@ public class StreamingRenderer implements GTRenderer {
      * screen distance is less than one pixel
      *
      * <p>Set the distance to 0 if you don't want any kind of generalization
-     *
-     * @param d
      */
     public void setGeneralizationDistance(double d) {
         generalizationDistance = d;
@@ -4128,6 +4073,59 @@ public class StreamingRenderer implements GTRenderer {
         @Override
         public int drainTo(Collection<? super RenderingRequest> c, int maxElements) {
             return delegate.drainTo(c, maxElements);
+        }
+    }
+
+    private class GCRRenderingTransformationHelper extends RenderingTransformationHelper {
+
+        private final Layer layer;
+
+        public GCRRenderingTransformationHelper(Layer layer) {
+            this.layer = layer;
+        }
+
+        @Override
+        protected GridCoverage2D readCoverage(
+                GridCoverage2DReader reader, Object readParams, GridGeometry2D readGG)
+                throws IOException {
+            Interpolation interpolation = getRenderingInterpolation(layer);
+            RenderingHints interpolationHints =
+                    new RenderingHints(JAI.KEY_INTERPOLATION, interpolation);
+            final GridCoverageRenderer gcr;
+
+            try {
+                Rectangle mapRasterArea = readGG.getGridRange2D();
+                final AffineTransform worldToScreen =
+                        RendererUtilities.worldToScreenTransform(mapExtent, mapRasterArea);
+                gcr =
+                        new GridCoverageRenderer(
+                                mapExtent.getCoordinateReferenceSystem(),
+                                mapExtent,
+                                mapRasterArea,
+                                worldToScreen,
+                                interpolationHints);
+                gcr.setAdvancedProjectionHandlingEnabled(isAdvancedProjectionHandlingEnabled());
+                gcr.setWrapEnabled(isMapWrappingEnabled());
+                RenderedImage ri =
+                        gcr.renderImage(
+                                reader,
+                                (GeneralParameterValue[]) readParams,
+                                null,
+                                interpolation,
+                                null,
+                                256,
+                                256);
+                if (ri != null) {
+                    PlanarImage pi = PlanarImage.wrapRenderedImage(ri);
+                    GridCoverage2D gc2d =
+                            (GridCoverage2D)
+                                    pi.getProperty(GridCoverageRenderer.PARENT_COVERAGE_PROPERTY);
+                    return gc2d;
+                }
+                return null;
+            } catch (TransformException | NoninvertibleTransformException | FactoryException e) {
+                throw new IOException("Failure rendering the coverage", e);
+            }
         }
     }
 }

@@ -66,6 +66,7 @@ import org.geotools.util.factory.Hints.Key;
 import org.geotools.util.logging.Logging;
 import org.locationtech.jts.geom.CoordinateSequenceFactory;
 import org.locationtech.jts.geom.Envelope;
+import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.jts.geom.MultiLineString;
@@ -167,6 +168,7 @@ class ShapefileFeatureSource extends ContentFeatureSource {
         }
 
         // Fill in geometries rather than XPath
+        @SuppressWarnings("unchecked")
         Object geom(Expression expr, Object data) {
             String propertyName =
                     expr instanceof PropertyName ? ((PropertyName) expr).getPropertyName() : null;
@@ -444,12 +446,7 @@ class ShapefileFeatureSource extends ContentFeatureSource {
         return SimpleFeatureTypeBuilder.retype(getSchema(), new ArrayList<String>(attributes));
     }
 
-    /**
-     * Builds the most appropriate geometry factory depending on the available query hints
-     *
-     * @param query
-     * @return
-     */
+    /** Builds the most appropriate geometry factory depending on the available query hints */
     protected GeometryFactory getGeometryFactory(Query query) {
         // if no hints, use the default geometry factory
         if (query == null || query.getHints() == null) {
@@ -531,7 +528,7 @@ class ShapefileFeatureSource extends ContentFeatureSource {
                 crs = null;
             }
 
-            Class<?> geometryClass =
+            Class<? extends Geometry> geometryClass =
                     JTSUtilities.findBestGeometryClass(shp.getHeader().getShapeType());
             build.setName(Classes.getShortName(geometryClass));
             build.setNillable(true);
@@ -551,7 +548,7 @@ class ShapefileFeatureSource extends ContentFeatureSource {
             if (dbf != null) {
                 DbaseFileHeader header = dbf.getHeader();
                 for (int i = 0, ii = header.getNumFields(); i < ii; i++) {
-                    Class attributeClass = header.getFieldClass(i);
+                    Class<?> attributeClass = header.getFieldClass(i);
                     String name = header.getFieldName(i);
                     if (usedNames.contains(name)) {
                         String origional = name;

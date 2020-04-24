@@ -50,7 +50,7 @@ public class QuadTree {
 
     private IndexFile indexfile;
 
-    private Set iterators = new HashSet();
+    private Set<Iterator<Data>> iterators = new HashSet<>();
 
     /**
      * Constructor. The maxDepth will be calculated.
@@ -115,15 +115,7 @@ public class QuadTree {
         this.insert(this.root, recno, bounds, this.maxDepth);
     }
 
-    /**
-     * Inserts a shape record id in the quadtree
-     *
-     * @param node
-     * @param recno
-     * @param bounds
-     * @param maxDepth
-     * @throws StoreException
-     */
+    /** Inserts a shape record id in the quadtree */
     public void insert(Node node, int recno, Envelope bounds, int maxDepth) throws StoreException {
 
         if (maxDepth > 1 && node.getNumSubNodes() > 0) {
@@ -181,10 +173,7 @@ public class QuadTree {
         node.addShapeId(recno);
     }
 
-    /**
-     * @param bounds
-     * @return A List of Integer
-     */
+    /** @return A List of Integer */
     public CloseableIterator<Data> search(Envelope bounds) throws StoreException {
         if (LOGGER.isLoggable(Level.FINEST)) {
             LOGGER.log(Level.FINEST, "Querying " + bounds);
@@ -198,12 +187,8 @@ public class QuadTree {
         }
     }
 
-    /**
-     * Closes this QuadTree after use...
-     *
-     * @throws StoreException
-     */
-    public void close(Iterator iter) throws IOException {
+    /** Closes this QuadTree after use... */
+    public void close(Iterator<Data> iter) throws IOException {
         iterators.remove(iter);
     }
 
@@ -325,7 +310,7 @@ public class QuadTree {
         }
     }
 
-    public void registerIterator(Iterator object) {
+    public void registerIterator(Iterator<Data> object) {
         iterators.add(object);
     }
 

@@ -102,7 +102,9 @@ public class HanaWKBWriter {
     }
 
     private static int computeSize(MultiPoint multiPoint, int dimension) {
-        return HEADER_SIZE + COUNT_SIZE + multiPoint.getNumPoints() * dimension * COORD_SIZE;
+        return HEADER_SIZE
+                + COUNT_SIZE
+                + multiPoint.getNumPoints() * (HEADER_SIZE + dimension * COORD_SIZE);
     }
 
     private static int computeSize(MultiLineString multiLineString, int dimension) {
@@ -190,7 +192,7 @@ public class HanaWKBWriter {
 
         write(shell.getCoordinateSequence(), dimension, buffer);
         for (int i = 0; i < numHoles; ++i) {
-            LineString hole = polygon.getInteriorRingN(0);
+            LineString hole = polygon.getInteriorRingN(i);
             write(hole.getCoordinateSequence(), dimension, buffer);
         }
     }
